@@ -133,7 +133,7 @@ def process_dataset(dataset_names, select_n_per_ds, split_name, groupby_col):
     for N, GROUPBYCOL, dataset_name in zip(select_n_per_ds, groupby_col, dataset_names):
         # dataset = load_dataset(dataset_name, split=split_name)
         # use jsonl to load dataset instead of use huggingface
-        dataset = load_dataset("json", dataset_name, split=split_name)
+        dataset = load_dataset("json", data_files=dataset_name, split=split_name)
         original_size = len(dataset)
         print(f"Processing dataset: {dataset_name}")
         print(f"Original dataset size: {original_size}")
