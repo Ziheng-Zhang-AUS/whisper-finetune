@@ -7,6 +7,8 @@ import torch.nn.functional as F
 from datasets import concatenate_datasets, load_dataset
 from librosa.feature.inverse import mel_to_audio
 from whisper.audio import HOP_LENGTH, N_FFT, N_SAMPLES
+from datasets import Features, Audio, Value
+
 
 
 class TimeWarpAugmenter:
@@ -131,9 +133,21 @@ def process_dataset(dataset_names, select_n_per_ds, split_name, groupby_col):
     processed_datasets = []
 
     for N, GROUPBYCOL, dataset_name in zip(select_n_per_ds, groupby_col, dataset_names):
+
+        # add features to correctly load dataset
+        audio_feature = Features({
+            "audio": Audio(sampling_rate=16000),  # 16kHz
+            "text": Value("string")
+        })
+
+
         # dataset = load_dataset(dataset_name, split=split_name)
         # use jsonl to load dataset instead of use huggingface
-        dataset = load_dataset("json", data_files=dataset_name, split=split_name)
+        dataset = load_dataset("json", data_files=dataset_name, split=split_name, features=audio_feature)
+
+        dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
+
+        
         original_size = len(dataset)
         print(f"Processing dataset: {dataset_name}")
         print(f"Original dataset size: {original_size}")
