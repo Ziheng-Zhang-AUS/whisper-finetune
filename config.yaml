@@ -47,9 +47,9 @@ lr_scheduler:
 # ----------------- 数据集相关 -----------------
 dataset:
   train_datasets:
-    - "/home/ziheng/whisper/whisper-finetune/dataset/tc_dataset/train/combined.jsonl"
+    - "/home/ziheng/whisper-finetune/dataset/transcribe/train/data.jsonl"
   val_datasets:
-    - "/home/ziheng/whisper/whisper-finetune/dataset/tc_dataset/val/combined.jsonl"
+    - "/home/ziheng/whisper-finetune/dataset/transcribe/val/data.jsonl"
   train_split_name: "train"
   # Be careful
   valid_split_name: "train"
