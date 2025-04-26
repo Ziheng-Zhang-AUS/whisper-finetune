@@ -177,3 +177,6 @@ downloaded_models/*
 *.srt
 *.txt
 *.rtf
+
+dataset/
+
