@@ -130,6 +130,22 @@ def process_dataset(dataset_names, select_n_per_ds, split_name, groupby_col):
     Returns:
     - concatenated_dataset: A concatenated dataset of all processed datasets.
     """
+    # check the decoder input is too long or not.
+    # -----------------------------------------
+    from transformers import WhisperTokenizer
+
+    tokenizer = WhisperTokenizer.from_pretrained("openai/whisper-small")  # 注意改成你实际用的小模型名称
+
+    def filter_long_samples(example):
+        tokens = tokenizer(
+            example["text"],
+            truncation=False,
+            add_special_tokens=False
+        )["input_ids"]
+        return len(tokens)+10 <= 448  # 设定最大允许token数，比如448
+
+    # ------------------------------------------
+
     processed_datasets = []
 
     for N, GROUPBYCOL, dataset_name in zip(select_n_per_ds, groupby_col, dataset_names):
@@ -145,9 +161,10 @@ def process_dataset(dataset_names, select_n_per_ds, split_name, groupby_col):
         # use jsonl to load dataset instead of use huggingface
         dataset = load_dataset("json", data_files=dataset_name, split=split_name, features=audio_feature)
 
+        dataset = dataset.filter(filter_long_samples)
         dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
 
-        
+
         original_size = len(dataset)
         print(f"Processing dataset: {dataset_name}")
         print(f"Original dataset size: {original_size}")
@@ -182,7 +199,12 @@ def process_dataset(dataset_names, select_n_per_ds, split_name, groupby_col):
 
         if "language" not in dataset.column_names:
             dataset = dataset.map(
-                add_fixed_value, batched=True, fn_kwargs={"col_name": "language", "fixed_value": "de"}
+                add_fixed_value, batched=True, fn_kwargs={"col_name": "language", "fixed_value": "su"}
+            )
+
+        if "prompt" not in dataset.column_names:
+            dataset = dataset.map(
+                add_fixed_value, batched=True, fn_kwargs={"col_name": "prompt", "fixed_value": ""}
             )
 
         processed_datasets.append(dataset)
