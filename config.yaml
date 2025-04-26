@@ -1,0 +1,84 @@
+# config.yaml
+
+# ----------------- 模型相关 -----------------
+model:
+  init_name: "small"        # 可选: tiny/base/small/medium/large
+  bfloat16: false           # 是否启用 bfloat16
+
+# ----------------- 训练策略 -----------------
+training:
+  gradient_checkpointing_encoder: false
+  gradient_checkpointing_decoder: false
+  train_only_decoder: false
+  train_only_encoder: false
+  stochastic_depth: 0.0
+  train_steps:        # 可以不填，脚本会自动计算
+  val_steps:            # 可以不填，脚本会自动计算
+  max_train_loss: 10.0
+  save_all_checkpoints: false
+  epochs: 50     # ⬅ 你想训练几轮就写几轮
+  accum_grad_steps: 1
+  eval_steps: 1
+  mixed_precision_training: false
+  mp_dtype: "fp16"
+  max_grad_norm: 1.0
+
+
+
+# ----------------- 优化器 & 调度 -----------------
+optimizer:
+  type: "adamw"
+  name: "AdamW"
+  lr: 1e-5
+  weight_decay: 0.01
+  8bit: false
+  params:
+    lr: 1e-5
+    weight_decay: 0.01
+    betas: [0.9, 0.98]       # 可选
+    eps: 1e-6 
+
+
+lr_scheduler:
+  name: "linear"
+  warmup_steps: 0.1         # 比例（<1.0）或具体步数
+  type: "linear"  
+
+# ----------------- 数据集相关 -----------------
+dataset:
+  train_datasets:
+    - "/home/ziheng/whisper/whisper-finetune/dataset/tc_dataset/train/combined.jsonl"
+  val_datasets:
+    - "/home/ziheng/whisper/whisper-finetune/dataset/tc_dataset/val/combined.jsonl"
+  train_split_name: "train"
+  # Be careful
+  valid_split_name: "train"
+  select_n_per_t_ds: [NULL]            # ✅ 改成 list
+  select_n_per_v_ds: [NULL]            # ✅ 改成 list
+  groupby_col: ["utt_id"]            # ✅ 改成 list
+  batch_size: 4
+  batch_size_eval: 4
+  no_timestamp_training: false
+  max_prompt_length: 100
+  prompt_use_rate: 1.0
+  no_timestamp_rate: 0.0
+
+
+# ----------------- 数据增强 -----------------
+augmentation:
+  spec_augment:
+    apply: false
+    freq_mask: 2
+    time_mask: 2
+  audio_augment:
+    apply: false
+
+# ----------------- 随机种子 -----------------
+seed: 42
+
+# ----------------- 保存目录后缀 -----------------
+save_dir: "my_whisper_run"
+
+# ----------------- Tokenizer ------------------
+tokenizer:
+  task: "transcribe_ts"
