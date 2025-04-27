@@ -239,7 +239,7 @@ class AudioDataset(Dataset):
         record = self.hu_dataset[index]
         no_timestamps = self.no_timestamp_training or torch.rand(1).item() < self.no_timestamps_rate
         
-        print(f"no_timestamps: {no_timestamps}")
+        # print(f"no_timestamps: {no_timestamps}")
         
         self.total_samples_count += 1
 
