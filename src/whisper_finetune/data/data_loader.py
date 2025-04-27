@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
+import random
 
 import numpy as np
 import torch
@@ -79,6 +80,12 @@ class AudioDataset(Dataset):
         self.no_timestamps_rate = no_timestamps_rate
         self.spec_augment = spec_augment
         self.audio_aug = audio_aug
+        self.no_timestamps_true_count = 0
+        self.total_samples_count = 0
+        
+        print(f"[DEBUG INIT] no_timestamp_training={no_timestamp_training}, no_timestamps_rate={no_timestamps_rate}")
+
+
 
         if spec_augment:
             self.time_masking = T.TimeMasking(time_mask_param=spec_augment_params["time_mask_param"])
@@ -231,12 +238,24 @@ class AudioDataset(Dataset):
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         record = self.hu_dataset[index]
         no_timestamps = self.no_timestamp_training or torch.rand(1).item() < self.no_timestamps_rate
+        
+        print(f"no_timestamps: {no_timestamps}")
+        
+        self.total_samples_count += 1
+
+        if no_timestamps:
+            self.no_timestamps_true_count += 1
+            
+        print(f"[DEBUG] total_samples_count so far: {self.total_samples_count}")
+        print(f"[DEBUG] no_timestamps_true_count so far: {self.no_timestamps_true_count}")
+
 
         prompt_tokens = self._get_prompt_tokens(record, no_timestamps)
         text_tokens, next_partial_segment_start = self._get_text_tokens(record["text"], no_timestamps)
         is_text_empty = len(text_tokens) == 0
         task = record["task"]
-        special_tokens = self._get_special_tokens(is_text_empty, record["language"], no_timestamps)
+        special_tokens = self._get_special_tokens(is_text_empty, record["language"], no_timestamps, record["task"])
+
 
         decoder_input = prompt_tokens + special_tokens + text_tokens
         if len(decoder_input) > self.model_n_text_ctx:
@@ -244,7 +263,7 @@ class AudioDataset(Dataset):
 
         decoder_output = self._construct_decoder_output(prompt_tokens, special_tokens, text_tokens)
         audio_arr = record["audio"]["array"]
-        del record
+        # del record
 
         # Pad in audio domain, not spectrogram domain.
         # https://github.com/openai/whisper/discussions/838#discussioncomment-5233715
@@ -258,6 +277,19 @@ class AudioDataset(Dataset):
             audio_arr = np.pad(audio_arr, (0, N_SAMPLES - audio_arr.shape[0]), "constant")
 
         mel = self._calculate_mel(audio_arr, next_partial_segment_start, no_timestamps)
+        
+        # === DEBUG 打印 special tokens 和 timestamp状态 ===
+        if random.random() < 0.001:  # 每1000个样本随机打印1个，防止太多
+            print("\n[Debug Sample]")
+            print(f"Task: {record['task']}")
+            print(f"Language: {record['language']}")
+            print(f"no_timestamps (是否去掉时间戳token): {no_timestamps}")
+            print(f"Special tokens added: {[self.tokenizer.decode([tok]) for tok in special_tokens]}")
+            print(f"Prompt tokens length: {len(prompt_tokens)}")
+            print(f"Text tokens length: {len(text_tokens)}")
+            print(f"Decoder input IDs (first 20): {decoder_input[:20]}")
+            print(f"Decoder output IDs (first 20): {decoder_output[:20]}")
+
 
         return (
             mel,
@@ -268,11 +300,12 @@ class AudioDataset(Dataset):
 
 
 def collate_fn(data):
-    x, y_in, y_out = zip(*data)
+    # x, y_in, y_out = zip(*data)
+    x, y_in, y_out, task = zip(*data)
     x = pad_sequence(x, batch_first=True, padding_value=0)
     y_in = pad_sequence(y_in, batch_first=True, padding_value=0)
     y_out = pad_sequence(y_out, batch_first=True, padding_value=-100)
-    return x, y_in, y_out
+    return x, y_in, y_out, task
 
 
 def get_dataloader(
@@ -294,6 +327,8 @@ def get_dataloader(
     audio_augment_params: Optional[dict] = None,
 ) -> DataLoader:
     print(f"Found {len(hu_dataset)} records in the dataset.")
+    print(f"[DEBUG get_dataloader] no_timestamp_training={no_timestamp_training}, no_timestamps_rate={no_timestamps_rate}")
+
     dataset = AudioDataset(
         hu_dataset,
         tokenizer,

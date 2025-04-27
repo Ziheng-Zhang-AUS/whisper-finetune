@@ -72,7 +72,9 @@ def main_loop(
     # min_loss, min_wer = evaluate(model, dev_loader, t_config)
     min_loss, min_wer, min_bleu = evaluate(model, dev_loader, t_config)
 
-    print(f"Initial loss: {min_loss}. Initial WER: {min_wer}")
+    # print(f"Initial loss: {min_loss}. Initial WER: {min_wer}")
+    print(f"Initial loss: {min_loss:.4f}. Initial WER: {min_wer:.4f}. Initial BLEU: {min_bleu:.2f}")
+
     logging.info(f"eval\t0\t{min_loss}\t{scheduler.get_last_lr()[0]}")
     wandb.log({"Initial loss": min_loss, "Initial WER": min_wer})
 
@@ -91,7 +93,8 @@ def main_loop(
             # tqdm.write(f"Step {step}: validation loss={eval_loss}")
             # wandb.log({"Validation loss": eval_loss, "Validation WER": eval_wer})  # Log validation loss
             eval_loss, eval_wer, eval_bleu = evaluate(model, dev_loader, t_config)
-            tqdm.write(f"Step {step}: validation loss={eval_loss}")
+            # tqdm.write(f"Step {step}: validation loss={eval_loss}")
+            tqdm.write(f"Step {step}: validation loss={eval_loss}, WER={eval_wer}, BLEU={eval_bleu}")
             wandb.log({
                 "Validation loss": eval_loss,
                 "Validation WER": eval_wer if eval_wer is not None else -1,
@@ -255,6 +258,8 @@ def main(config):
 
     # Get tokenizer
     tokenizer = get_tokenizer(multilingual=True, language="de", task="transcribe")
+    
+    # print("[Before processing datasets]", config["dataset"]["no_timestamp_rate"])
 
     # Get dataloaders
     train_loader = get_dataloader(
@@ -272,6 +277,10 @@ def main(config):
         audio_aug=config["augmentation"]["audio_augment"]["apply"],
         audio_augment_params=config["augmentation"]["audio_augment"],
     )
+    
+    # print("[After processing datasets]", config["dataset"]["no_timestamp_rate"])
+    
+    
     val_loader = get_dataloader(
         hu_dataset=val_dataset,
         tokenizer=tokenizer,

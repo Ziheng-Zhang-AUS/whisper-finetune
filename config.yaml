@@ -47,9 +47,9 @@ lr_scheduler:
 # ----------------- 数据集相关 -----------------
 dataset:
   train_datasets:
-    - "/home/ziheng/whisper-finetune/dataset/transcribe/train/data.jsonl"
+    - "/home/ziheng/whisper-finetune/dataset/union/train/data.jsonl"
   val_datasets:
-    - "/home/ziheng/whisper-finetune/dataset/transcribe/val/data.jsonl"
+    - "/home/ziheng/whisper-finetune/dataset/union/val/data.jsonl"
   train_split_name: "train"
   # Be careful
   valid_split_name: "train"
@@ -61,7 +61,7 @@ dataset:
   no_timestamp_training: false
   max_prompt_length: 100
   prompt_use_rate: 1.0
-  no_timestamp_rate: 0.0
+  no_timestamp_rate: 0.5
 
 
 # ----------------- 数据增强 -----------------

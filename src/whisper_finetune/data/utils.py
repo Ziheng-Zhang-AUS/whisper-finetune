@@ -153,7 +153,8 @@ def process_dataset(dataset_names, select_n_per_ds, split_name, groupby_col):
         # add features to correctly load dataset
         audio_feature = Features({
             "audio": Audio(sampling_rate=16000),  # 16kHz
-            "text": Value("string")
+            "text": Value("string"),
+            "task": Value(dtype="string"),
         })
 
 
