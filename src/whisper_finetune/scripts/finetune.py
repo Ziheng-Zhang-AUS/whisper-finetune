@@ -156,8 +156,21 @@ def main(config):
     print("GPU Name:", torch.cuda.get_device_name(0))
     print("GPU memory:", torch.cuda.get_device_properties(0).total_memory / 1024**3, "GB")
 
-    ## Get model
+    # Step 1: 加载初始模型架构
     whisper_model = whisper.load_model(config["model"]["init_name"], device="cpu")
+
+    # Step 2: 如果指定了权重路径，就加载权重
+    if "init_weights_path" in config["model"] and config["model"]["init_weights_path"] is not None:
+        print(f"🔄 Loading pretrained weights from {config['model']['init_weights_path']}")
+        state_dict = torch.load(config["model"]["init_weights_path"], map_location="cpu")
+
+        # 如果是保存的全checkpoint，需要提取 model_state_dict
+        if "model_state_dict" in state_dict:
+            state_dict = state_dict["model_state_dict"]
+
+        missing, unexpected = whisper_model.load_state_dict(state_dict, strict=False)
+        print(f"✅ Loaded weights. Missing keys: {len(missing)}, Unexpected keys: {len(unexpected)}")
+
 
     # bfloat16 training?
     if config["model"]["bfloat16"]:

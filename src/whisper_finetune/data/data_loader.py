@@ -244,7 +244,14 @@ class AudioDataset(Dataset):
 
         # Pad in audio domain, not spectrogram domain.
         # https://github.com/openai/whisper/discussions/838#discussioncomment-5233715
-        audio_arr = np.pad(audio_arr, (0, N_SAMPLES - audio_arr.shape[0]), "constant")
+
+        # replace this line with code that can also processs longer than 30s
+        # audio_arr = np.pad(audio_arr, (0, N_SAMPLES - audio_arr.shape[0]), "constant")
+
+        if audio_arr.shape[0] > N_SAMPLES:
+            audio_arr = audio_arr[:N_SAMPLES]
+        else:
+            audio_arr = np.pad(audio_arr, (0, N_SAMPLES - audio_arr.shape[0]), "constant")
 
         mel = self._calculate_mel(audio_arr, next_partial_segment_start, no_timestamps)
 

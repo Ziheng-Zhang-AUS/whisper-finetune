@@ -16,7 +16,7 @@ training:
   val_steps:            # 可以不填，脚本会自动计算
   max_train_loss: 10.0
   save_all_checkpoints: false
-  epochs: 50     # ⬅ 你想训练几轮就写几轮
+  epochs: 30     # ⬅ 你想训练几轮就写几轮
   accum_grad_steps: 1
   eval_steps: 1
   mixed_precision_training: false
@@ -56,8 +56,8 @@ dataset:
   select_n_per_t_ds: [NULL]            # ✅ 改成 list
   select_n_per_v_ds: [NULL]            # ✅ 改成 list
   groupby_col: ["utt_id"]            # ✅ 改成 list
-  batch_size: 4
-  batch_size_eval: 4
+  batch_size: 2
+  batch_size_eval: 2
   no_timestamp_training: false
   max_prompt_length: 100
   prompt_use_rate: 1.0
