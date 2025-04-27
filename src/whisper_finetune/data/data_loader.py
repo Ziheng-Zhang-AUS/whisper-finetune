@@ -83,7 +83,7 @@ class AudioDataset(Dataset):
         self.no_timestamps_true_count = 0
         self.total_samples_count = 0
         
-        print(f"[DEBUG INIT] no_timestamp_training={no_timestamp_training}, no_timestamps_rate={no_timestamps_rate}")
+        # print(f"[DEBUG INIT] no_timestamp_training={no_timestamp_training}, no_timestamps_rate={no_timestamps_rate}")
 
 
 
@@ -246,8 +246,8 @@ class AudioDataset(Dataset):
         if no_timestamps:
             self.no_timestamps_true_count += 1
             
-        print(f"[DEBUG] total_samples_count so far: {self.total_samples_count}")
-        print(f"[DEBUG] no_timestamps_true_count so far: {self.no_timestamps_true_count}")
+        # print(f"[DEBUG] total_samples_count so far: {self.total_samples_count}")
+        # print(f"[DEBUG] no_timestamps_true_count so far: {self.no_timestamps_true_count}")
 
 
         prompt_tokens = self._get_prompt_tokens(record, no_timestamps)
@@ -327,7 +327,7 @@ def get_dataloader(
     audio_augment_params: Optional[dict] = None,
 ) -> DataLoader:
     print(f"Found {len(hu_dataset)} records in the dataset.")
-    print(f"[DEBUG get_dataloader] no_timestamp_training={no_timestamp_training}, no_timestamps_rate={no_timestamps_rate}")
+    # print(f"[DEBUG get_dataloader] no_timestamp_training={no_timestamp_training}, no_timestamps_rate={no_timestamps_rate}")
 
     dataset = AudioDataset(
         hu_dataset,
