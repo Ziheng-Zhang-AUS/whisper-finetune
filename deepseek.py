@@ -44,9 +44,9 @@ from pydub import AudioSegment
 
 # ---------- 超参数配置 ----------
 # 输入 JSONL 路径，请修改为实际路径
-INPUT_JSONL = "/home/ziheng/whisper-finetune/dataset/translate_sentences/train/data.jsonl"
+INPUT_JSONL = "/home/ziheng/whisper-finetune/dataset/translate_sentences/test/data.jsonl"
 # 输出目录，请修改为实际路径；拼接的 wav 和 output.jsonl 都会生成在此目录下
-OUTPUT_DIR = "/home/ziheng/whisper-finetune/dataset/translate_ts/train/"
+OUTPUT_DIR = "/home/ziheng/whisper-finetune/dataset/translate_ts/test/"
 # 每次调用 DeepSeek 的行数上限
 CHUNK_SIZE = 50
 # 每段最大音频时长（秒）

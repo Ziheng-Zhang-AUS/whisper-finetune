@@ -96,7 +96,9 @@ class AudioDataset(Dataset):
         self.hu_dataset = self.hu_dataset.with_format(type="torch")
 
         # Some checks
-        assert np.intersect1d(self.hu_dataset.column_names, ["audio", "text", "language"]).size == 3
+        # assert np.intersect1d(self.hu_dataset.column_names, ["audio", "text", "language"]).size == 3
+        assert np.intersect1d(self.hu_dataset.column_names, ["audio", "text", "language", "task"]).size == 4
+
 
     def __len__(self) -> int:
         return len(self.hu_dataset)
@@ -113,14 +115,15 @@ class AudioDataset(Dataset):
 
         return prompt_tokens
 
-    def _get_special_tokens(self, is_text_empty: bool, language: str, no_timestamps: bool) -> List[int]:
+    def _get_special_tokens(self, is_text_empty: bool, language: str, no_timestamps: bool, task: str) -> List[int]:
+
         if is_text_empty:
             special_tokens = [self.tokenizer.sot, self.tokenizer.no_speech]
         else:
             special_tokens = [
                 self.tokenizer.sot,
                 self.tokenizer.special_tokens[f"<|{language}|>"],
-                self.tokenizer.special_tokens["<|transcribe|>"],
+                self.tokenizer.special_tokens[f"<|{task}|>"],
             ]
             if no_timestamps:
                 special_tokens.append(self.tokenizer.no_timestamps)
@@ -232,6 +235,7 @@ class AudioDataset(Dataset):
         prompt_tokens = self._get_prompt_tokens(record, no_timestamps)
         text_tokens, next_partial_segment_start = self._get_text_tokens(record["text"], no_timestamps)
         is_text_empty = len(text_tokens) == 0
+        task = record["task"]
         special_tokens = self._get_special_tokens(is_text_empty, record["language"], no_timestamps)
 
         decoder_input = prompt_tokens + special_tokens + text_tokens
@@ -259,6 +263,7 @@ class AudioDataset(Dataset):
             mel,
             torch.tensor(decoder_input, dtype=torch.int64),
             torch.tensor(decoder_output, dtype=torch.int64),
+            record["task"], 
         )
 
 

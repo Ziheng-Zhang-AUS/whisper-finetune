@@ -98,89 +98,164 @@ def train_step(
     return total_loss
 
 
+# @torch.no_grad()
+# def evaluate(model: Whisper, dev_loader: DataLoader, t_config: dict) -> float:
+#     model.eval()
+#     total_loss = 0.0
+#     pred_sentences, true_sentences = [], []
+
+#     # Read variables from t_config
+#     mixed_precision_training = t_config["mixed_precision_training"]
+#     mp_dtype = torch.float16 if t_config["mp_dtype"] == "fp16" else torch.bfloat16
+
+#     # Get tokenizer & eval metric
+#     tokenizer = get_tokenizer(multilingual=True, language="de", task="transcribe")
+
+#     wer = WER()
+
+#     for x, y_in, y_out in tqdm(dev_loader):
+#         x, y_in, y_out = x.to(model.device), y_in.to(model.device), y_out.to(model.device)
+#         with torch.autocast(device_type="cuda", enabled=mixed_precision_training, dtype=mp_dtype):
+#             logits = model(x, y_in)
+
+#             loss = F.cross_entropy(logits.transpose(1, 2), y_out)
+
+#             # Convert logits to token IDs
+#             pred_token_ids = torch.argmax(logits, dim=-1)
+
+#             # Filter out -100 values, special tokens and decode.
+#             batch_pred = [
+#                 tokenizer.decode(
+#                     [id for id in ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
+#                 )
+#                 for ids in pred_token_ids
+#             ]
+#             batch_true = [
+#                 tokenizer.decode(
+#                     [id for id in ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
+#                 )
+#                 for ids in y_out
+#             ]
+
+#             # Normalize and filter out empty sentences in the reference
+#             mask = [True if x != "" else False for x in batch_true]
+#             batch_pred = [normalize_text(x, **VOCAB_SPECS["v0"]) for x, m in zip(batch_pred, mask) if m]
+#             batch_true = [normalize_text(x, **VOCAB_SPECS["v0"]) for x, m in zip(batch_true, mask) if m]
+
+#             # Append
+#             pred_sentences.extend(batch_pred)
+#             true_sentences.extend(batch_true)
+
+#         # Check loss for NANs
+#         if torch.isnan(loss).any():
+#             nan_mask = torch.isnan(loss)
+#             for idx, has_nan in enumerate(nan_mask):
+#                 if has_nan:
+#                     error_sample_pred = batch_pred[idx]
+#                     error_sample_true = batch_true[idx]
+
+#                     # Detach, move to CPU, and convert to numpy for logging
+#                     x_logged = x[idx].detach().cpu().numpy() if x[idx].requires_grad else x[idx].cpu().numpy()
+#                     y_out_logged = (
+#                         y_out[idx].detach().cpu().numpy() if y_out[idx].requires_grad else y_out[idx].cpu().numpy()
+#                     )
+
+#                     wandb.log(
+#                         {
+#                             "error_sample_idx": idx,
+#                             "error_sample_pred": error_sample_pred,
+#                             "error_sample_true": error_sample_true,
+#                             # Depending on the shape and data, you might log directly or use a visualization method
+#                             "x_sample": x_logged,
+#                             "y_sample": y_out_logged,
+#                         }
+#                     )
+#                     raise Exception("Aborting because of NANs in validation loss.")
+#         else:
+#             total_loss += loss.item()
+
+#     wer = wer._compute(
+#         predictions=pred_sentences,
+#         references=true_sentences,
+#     )
+
+#     del x, y_in, y_out, pred_sentences, true_sentences, batch_pred, batch_true
+#     return total_loss / len(dev_loader), wer
+
 @torch.no_grad()
-def evaluate(model: Whisper, dev_loader: DataLoader, t_config: dict) -> float:
+def evaluate(model: Whisper, dev_loader: DataLoader, t_config: dict):
     model.eval()
     total_loss = 0.0
-    pred_sentences, true_sentences = [], []
 
-    # Read variables from t_config
+    pred_sentences_transcribe = []
+    true_sentences_transcribe = []
+
+    pred_sentences_translate = []
+    true_sentences_translate = []
+
     mixed_precision_training = t_config["mixed_precision_training"]
     mp_dtype = torch.float16 if t_config["mp_dtype"] == "fp16" else torch.bfloat16
 
-    # Get tokenizer & eval metric
     tokenizer = get_tokenizer(multilingual=True, language="de", task="transcribe")
+    wer_metric = WER()
 
-    wer = WER()
+    import sacrebleu
 
-    for x, y_in, y_out in tqdm(dev_loader):
+    for batch in tqdm(dev_loader):
+        if len(batch) == 4:
+            x, y_in, y_out, task = batch
+        else:
+            raise ValueError("Batch must contain 4 elements: (x, y_in, y_out, task)")
+
         x, y_in, y_out = x.to(model.device), y_in.to(model.device), y_out.to(model.device)
+        
         with torch.autocast(device_type="cuda", enabled=mixed_precision_training, dtype=mp_dtype):
             logits = model(x, y_in)
 
-            loss = F.cross_entropy(logits.transpose(1, 2), y_out)
-
-            # Convert logits to token IDs
-            pred_token_ids = torch.argmax(logits, dim=-1)
-
-            # Filter out -100 values, special tokens and decode.
-            batch_pred = [
-                tokenizer.decode(
-                    [id for id in ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
-                )
-                for ids in pred_token_ids
-            ]
-            batch_true = [
-                tokenizer.decode(
-                    [id for id in ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
-                )
-                for ids in y_out
-            ]
-
-            # Normalize and filter out empty sentences in the reference
-            mask = [True if x != "" else False for x in batch_true]
-            batch_pred = [normalize_text(x, **VOCAB_SPECS["v0"]) for x, m in zip(batch_pred, mask) if m]
-            batch_true = [normalize_text(x, **VOCAB_SPECS["v0"]) for x, m in zip(batch_true, mask) if m]
-
-            # Append
-            pred_sentences.extend(batch_pred)
-            true_sentences.extend(batch_true)
-
-        # Check loss for NANs
-        if torch.isnan(loss).any():
-            nan_mask = torch.isnan(loss)
-            for idx, has_nan in enumerate(nan_mask):
-                if has_nan:
-                    error_sample_pred = batch_pred[idx]
-                    error_sample_true = batch_true[idx]
-
-                    # Detach, move to CPU, and convert to numpy for logging
-                    x_logged = x[idx].detach().cpu().numpy() if x[idx].requires_grad else x[idx].cpu().numpy()
-                    y_out_logged = (
-                        y_out[idx].detach().cpu().numpy() if y_out[idx].requires_grad else y_out[idx].cpu().numpy()
-                    )
-
-                    wandb.log(
-                        {
-                            "error_sample_idx": idx,
-                            "error_sample_pred": error_sample_pred,
-                            "error_sample_true": error_sample_true,
-                            # Depending on the shape and data, you might log directly or use a visualization method
-                            "x_sample": x_logged,
-                            "y_sample": y_out_logged,
-                        }
-                    )
-                    raise Exception("Aborting because of NANs in validation loss.")
-        else:
+            loss = F.cross_entropy(logits.transpose(1, 2), y_out, ignore_index=-100)
             total_loss += loss.item()
 
-    wer = wer._compute(
-        predictions=pred_sentences,
-        references=true_sentences,
-    )
+            pred_token_ids = torch.argmax(logits, dim=-1)
 
-    del x, y_in, y_out, pred_sentences, true_sentences, batch_pred, batch_true
-    return total_loss / len(dev_loader), wer
+            # 逐个样本处理
+            for pred_ids, target_ids, task_item in zip(pred_token_ids, y_out, task):
+                pred_text = tokenizer.decode(
+                    [id for id in pred_ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
+                )
+                target_text = tokenizer.decode(
+                    [id for id in target_ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
+                )
+
+                pred_text = normalize_text(pred_text, **VOCAB_SPECS["v0"])
+                target_text = normalize_text(target_text, **VOCAB_SPECS["v0"])
+
+                if task_item == "transcribe":
+                    if target_text != "":
+                        pred_sentences_transcribe.append(pred_text)
+                        true_sentences_transcribe.append(target_text)
+                elif task_item == "translate":
+                    if target_text != "":
+                        pred_sentences_translate.append(pred_text)
+                        true_sentences_translate.append(target_text)
+                else:
+                    raise ValueError(f"Unknown task type: {task_item}")
+
+    # 计算最终指标
+    if len(true_sentences_transcribe) > 0:
+        val_wer = wer_metric._compute(pred_sentences_transcribe, true_sentences_transcribe)
+    else:
+        val_wer = None
+
+    if len(true_sentences_translate) > 0:
+        bleu = sacrebleu.corpus_bleu(pred_sentences_translate, [true_sentences_translate])
+        val_bleu = bleu.score
+    else:
+        val_bleu = None
+
+    avg_loss = total_loss / len(dev_loader)
+
+    return avg_loss, val_wer, val_bleu
+
 
 
 def save_model(model: Whisper, save_path: str) -> None:

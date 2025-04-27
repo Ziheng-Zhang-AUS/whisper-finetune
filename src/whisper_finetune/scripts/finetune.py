@@ -69,7 +69,9 @@ def main_loop(
     """
     wandb.watch(model, log="all")
 
-    min_loss, min_wer = evaluate(model, dev_loader, t_config)
+    # min_loss, min_wer = evaluate(model, dev_loader, t_config)
+    min_loss, min_wer, min_bleu = evaluate(model, dev_loader, t_config)
+
     print(f"Initial loss: {min_loss}. Initial WER: {min_wer}")
     logging.info(f"eval\t0\t{min_loss}\t{scheduler.get_last_lr()[0]}")
     wandb.log({"Initial loss": min_loss, "Initial WER": min_wer})
@@ -85,9 +87,17 @@ def main_loop(
         assert train_loss < t_config['max_train_loss'], f"Train loss is above {t_config['max_train_loss']}, the loss is unable to converge."
 
         if (step % t_config["val_steps"]) == 0 or step == t_config["train_steps"] + 1:
-            eval_loss, eval_wer = evaluate(model, dev_loader, t_config)
+            # eval_loss, eval_wer = evaluate(model, dev_loader, t_config)
+            # tqdm.write(f"Step {step}: validation loss={eval_loss}")
+            # wandb.log({"Validation loss": eval_loss, "Validation WER": eval_wer})  # Log validation loss
+            eval_loss, eval_wer, eval_bleu = evaluate(model, dev_loader, t_config)
             tqdm.write(f"Step {step}: validation loss={eval_loss}")
-            wandb.log({"Validation loss": eval_loss, "Validation WER": eval_wer})  # Log validation loss
+            wandb.log({
+                "Validation loss": eval_loss,
+                "Validation WER": eval_wer if eval_wer is not None else -1,
+                "Validation BLEU": eval_bleu if eval_bleu is not None else -1,
+            })
+
 
             if eval_wer < min_wer:
                 min_wer = eval_wer
