@@ -16,6 +16,7 @@ from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import whisper
 from whisper import _ALIGNMENT_HEADS, _MODELS, _download, available_models
 from whisper.model import AudioEncoder, TextDecoder, Whisper
 from whisper.tokenizer import get_tokenizer
@@ -184,16 +185,98 @@ def train_step(
 #     del x, y_in, y_out, pred_sentences, true_sentences, batch_pred, batch_true
 #     return total_loss / len(dev_loader), wer
 
+# @torch.no_grad()
+# def evaluate(model: Whisper, dev_loader: DataLoader, t_config: dict):
+#     model.eval()
+#     total_loss = 0.0
+
+#     pred_sentences_transcribe = []
+#     true_sentences_transcribe = []
+
+#     pred_sentences_translate = []
+#     true_sentences_translate = []
+
+#     mixed_precision_training = t_config["mixed_precision_training"]
+#     mp_dtype = torch.float16 if t_config["mp_dtype"] == "fp16" else torch.bfloat16
+
+#     tokenizer = get_tokenizer(multilingual=True, language="su", task="transcribe")
+#     wer_metric = WER()
+
+#     import sacrebleu
+
+#     for batch in tqdm(dev_loader):
+#         if len(batch) == 4:
+#             x, y_in, y_out, task = batch
+#         else:
+#             raise ValueError("Batch must contain 4 elements: (x, y_in, y_out, task)")
+
+#         x, y_in, y_out = x.to(model.device), y_in.to(model.device), y_out.to(model.device)
+        
+#         with torch.autocast(device_type="cuda", enabled=mixed_precision_training, dtype=mp_dtype):
+#             logits = model(x, y_in)
+
+#             loss = F.cross_entropy(logits.transpose(1, 2), y_out, ignore_index=-100)
+#             total_loss += loss.item()
+
+#             pred_token_ids = torch.argmax(logits, dim=-1)
+
+#             # 逐个样本处理
+#             for pred_ids, target_ids, task_item in zip(pred_token_ids, y_out, task):
+#                 pred_text = tokenizer.decode(
+#                     [id for id in pred_ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
+#                 )
+#                 target_text = tokenizer.decode(
+#                     [id for id in target_ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
+#                 )
+
+#                 pred_text = normalize_text(pred_text, **VOCAB_SPECS["v0"])
+#                 target_text = normalize_text(target_text, **VOCAB_SPECS["v0"])
+
+#                 if task_item == "transcribe":
+#                     if target_text != "":
+#                         pred_sentences_transcribe.append(pred_text)
+#                         true_sentences_transcribe.append(target_text)
+#                 elif task_item == "translate":
+#                     if target_text != "":
+#                         pred_sentences_translate.append(pred_text)
+#                         true_sentences_translate.append(target_text)
+#                 else:
+#                     raise ValueError(f"Unknown task type: {task_item}")
+
+#     # 计算最终指标
+#     if len(true_sentences_transcribe) > 0:
+#         val_wer = wer_metric._compute(pred_sentences_transcribe, true_sentences_transcribe)
+#     else:
+#         val_wer = None
+
+#     if len(true_sentences_translate) > 0:
+#         bleu = sacrebleu.corpus_bleu(pred_sentences_translate, [true_sentences_translate])
+#         val_bleu = bleu.score
+#     else:
+#         val_bleu = None
+
+#     avg_loss = total_loss / len(dev_loader)
+
+#     return avg_loss, val_wer, val_bleu
+
+# Correct evaluate() for WER and BLEU calculation
 @torch.no_grad()
 def evaluate(model: Whisper, dev_loader: DataLoader, t_config: dict):
     model.eval()
+
     total_loss = 0.0
 
+    # 正确推理版
     pred_sentences_transcribe = []
     true_sentences_transcribe = []
-
     pred_sentences_translate = []
     true_sentences_translate = []
+
+    # 错误 teacher forcing 版
+    tf_pred_sentences_transcribe = []
+    tf_true_sentences_transcribe = []
+    tf_pred_sentences_translate = []
+    tf_true_sentences_translate = []
 
     mixed_precision_training = t_config["mixed_precision_training"]
     mp_dtype = torch.float16 if t_config["mp_dtype"] == "fp16" else torch.bfloat16
@@ -210,39 +293,63 @@ def evaluate(model: Whisper, dev_loader: DataLoader, t_config: dict):
             raise ValueError("Batch must contain 4 elements: (x, y_in, y_out, task)")
 
         x, y_in, y_out = x.to(model.device), y_in.to(model.device), y_out.to(model.device)
-        
+
         with torch.autocast(device_type="cuda", enabled=mixed_precision_training, dtype=mp_dtype):
             logits = model(x, y_in)
-
             loss = F.cross_entropy(logits.transpose(1, 2), y_out, ignore_index=-100)
             total_loss += loss.item()
 
-            pred_token_ids = torch.argmax(logits, dim=-1)
+            tf_pred_token_ids = torch.argmax(logits, dim=-1)  # teacher forcing预测token id
 
-            # 逐个样本处理
-            for pred_ids, target_ids, task_item in zip(pred_token_ids, y_out, task):
-                pred_text = tokenizer.decode(
-                    [id for id in pred_ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
-                )
-                target_text = tokenizer.decode(
-                    [id for id in target_ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
-                )
+        for x_item, tf_pred_ids, target_ids, task_item in zip(x, tf_pred_token_ids, y_out, task):
+            x_item = x_item.unsqueeze(0)
 
-                pred_text = normalize_text(pred_text, **VOCAB_SPECS["v0"])
-                target_text = normalize_text(target_text, **VOCAB_SPECS["v0"])
+            # 正确推理版
+            decoding_options = whisper.DecodingOptions(
+                language="su",
+                task=task_item,
+                without_timestamps=True
+            )
+            result = whisper.decode(model, x_item, decoding_options)
+            pred_text = result[0].text.strip()
 
-                if task_item == "transcribe":
-                    if target_text != "":
-                        pred_sentences_transcribe.append(pred_text)
-                        true_sentences_transcribe.append(target_text)
-                elif task_item == "translate":
-                    if target_text != "":
-                        pred_sentences_translate.append(pred_text)
-                        true_sentences_translate.append(target_text)
-                else:
-                    raise ValueError(f"Unknown task type: {task_item}")
+            target_text = tokenizer.decode(
+                [id for id in target_ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
+            ).strip()
 
-    # 计算最终指标
+            pred_text = normalize_text(pred_text, **VOCAB_SPECS["v0"])
+            target_text = normalize_text(target_text, **VOCAB_SPECS["v0"])
+
+            if task_item == "transcribe":
+                if target_text != "":
+                    pred_sentences_transcribe.append(pred_text)
+                    true_sentences_transcribe.append(target_text)
+            elif task_item == "translate":
+                if target_text != "":
+                    pred_sentences_translate.append(pred_text)
+                    true_sentences_translate.append(target_text)
+            else:
+                raise ValueError(f"Unknown task type: {task_item}")
+
+            # 错误 teacher forcing版
+            tf_pred_text = tokenizer.decode(
+                [id for id in tf_pred_ids.cpu().tolist() if id not in tokenizer.special_tokens.values() and id != -100]
+            ).strip()
+
+            tf_pred_text = normalize_text(tf_pred_text, **VOCAB_SPECS["v0"])
+
+            if task_item == "transcribe":
+                if target_text != "":
+                    tf_pred_sentences_transcribe.append(tf_pred_text)
+                    tf_true_sentences_transcribe.append(target_text)
+            elif task_item == "translate":
+                if target_text != "":
+                    tf_pred_sentences_translate.append(tf_pred_text)
+                    tf_true_sentences_translate.append(target_text)
+            else:
+                raise ValueError(f"Unknown task type: {task_item}")
+
+    # 正确推理版指标
     if len(true_sentences_transcribe) > 0:
         val_wer = wer_metric._compute(pred_sentences_transcribe, true_sentences_transcribe)
     else:
@@ -254,7 +361,23 @@ def evaluate(model: Whisper, dev_loader: DataLoader, t_config: dict):
     else:
         val_bleu = None
 
+    # 错误 teacher forcing版指标
+    if len(tf_true_sentences_transcribe) > 0:
+        tf_val_wer = wer_metric._compute(tf_pred_sentences_transcribe, tf_true_sentences_transcribe)
+    else:
+        tf_val_wer = None
+
+    if len(tf_true_sentences_translate) > 0:
+        tf_bleu = sacrebleu.corpus_bleu(tf_pred_sentences_translate, [tf_true_sentences_translate])
+        tf_val_bleu = tf_bleu.score
+    else:
+        tf_val_bleu = None
+
     avg_loss = total_loss / len(dev_loader)
+
+    # 🔥 最后在打印的时候，把两套数值都打出来
+    print(f"[EVAL] Correct decoding:     WER={val_wer:.4f}  BLEU={val_bleu:.2f}")
+    print(f"[EVAL] Teacher-forcing fake:  WER={tf_val_wer:.4f}  BLEU={tf_val_bleu:.2f}")
 
     return avg_loss, val_wer, val_bleu
 
