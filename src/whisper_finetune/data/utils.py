@@ -134,7 +134,9 @@ def process_dataset(dataset_names, select_n_per_ds, split_name, groupby_col):
     # -----------------------------------------
     from transformers import WhisperTokenizer
 
-    tokenizer = WhisperTokenizer.from_pretrained("openai/whisper-small")  # 注意改成你实际用的小模型名称
+    # tokenizer = WhisperTokenizer.from_pretrained("openai/whisper-small")  # 注意改成你实际用的小模型名称
+    tokenizer = WhisperTokenizer.from_pretrained("/g/data/kf09/zz9840/whisper-finetune/models/tokenizer/whisper-medium")
+
 
     def filter_long_samples(example):
         tokens = tokenizer(

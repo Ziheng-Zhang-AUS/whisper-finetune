@@ -2,7 +2,7 @@
 
 # ----------------- 模型相关 -----------------
 model:
-  init_name: "small"        # 可选: tiny/base/small/medium/large
+  init_name: "medium"        # 可选: tiny/base/small/medium/large/large-ve-turbo
   bfloat16: false           # 是否启用 bfloat16
 
 # ----------------- 训练策略 -----------------
@@ -17,7 +17,7 @@ training:
   max_train_loss: 10.0
   save_all_checkpoints: false
   epochs: 30     # ⬅ 你想训练几轮就写几轮
-  accum_grad_steps: 1
+  accum_grad_steps: 4
   eval_steps: 1
   mixed_precision_training: false
   mp_dtype: "fp16"
@@ -47,9 +47,9 @@ lr_scheduler:
 # ----------------- 数据集相关 -----------------
 dataset:
   train_datasets:
-    - "/home/ziheng/whisper-finetune/dataset/union/train/data.jsonl"
+    - "/g/data/kf09/zz9840/whisper-finetune/transcribe_ts/train/data.jsonl"
   val_datasets:
-    - "/home/ziheng/whisper-finetune/dataset/union/val/data.jsonl"
+    - "/g/data/kf09/zz9840/whisper-finetune/transcribe_ts/val/data.jsonl"
   train_split_name: "train"
   # Be careful
   valid_split_name: "train"
@@ -57,7 +57,7 @@ dataset:
   select_n_per_v_ds: [NULL]            # ✅ 改成 list
   groupby_col: ["utt_id"]            # ✅ 改成 list
   batch_size: 2
-  batch_size_eval: 2
+  batch_size_eval: 8
   no_timestamp_training: false
   max_prompt_length: 100
   prompt_use_rate: 1.0

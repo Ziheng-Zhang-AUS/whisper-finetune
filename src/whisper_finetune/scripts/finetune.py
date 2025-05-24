@@ -42,6 +42,8 @@ from whisper_finetune.utils import (
 
 ENABLE_MEMORY_PROFILING = False
 
+os.environ["WANDB_MODE"] = "disabled"
+
 
 def main_loop(
     model: WhisperModel,
@@ -71,6 +73,11 @@ def main_loop(
 
     # min_loss, min_wer = evaluate(model, dev_loader, t_config)
     min_loss, min_wer, min_bleu = evaluate(model, dev_loader, t_config)
+
+    if any(x is None for x in [min_wer, min_bleu]):
+        print(f"[Warning] Evaluation returned None. WER: {min_wer}, BLEU: {min_bleu}")
+    min_wer = min_wer if min_wer is not None else -1
+    min_bleu = min_bleu if min_bleu is not None else -1
 
     # print(f"Initial loss: {min_loss}. Initial WER: {min_wer}")
     print(f"Initial loss: {min_loss:.4f}. Initial WER: {min_wer:.4f}. Initial BLEU: {min_bleu:.2f}")
@@ -170,7 +177,9 @@ def main(config):
     print("GPU memory:", torch.cuda.get_device_properties(0).total_memory / 1024**3, "GB")
 
     # Step 1: 加载初始模型架构
-    whisper_model = whisper.load_model(config["model"]["init_name"], device="cpu")
+    # whisper_model = whisper.load_model(config["model"]["init_name"], device="cpu")
+    whisper_model = whisper.load_model("/g/data/kf09/zz9840/whisper-finetune/models/medium.pt", device="cuda")
+
 
     # Step 2: 如果指定了权重路径，就加载权重
     if "init_weights_path" in config["model"] and config["model"]["init_weights_path"] is not None:
